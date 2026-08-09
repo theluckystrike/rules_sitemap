@@ -1,0 +1,53 @@
+"""A miniature static site: three pages, one sitemap, one robots.txt.
+
+`bazel build //:site` writes the two files a crawler needs next to the pages
+they describe, and `bazel test //...` proves the bytes are exactly what is
+expected before anything is uploaded.
+"""
+
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("@theluckystrike_rules_sitemap//sitemap:defs.bzl", "robots_txt", "sitemap_xml")
+
+PAGES = [
+    "/",
+    "/pricing/",
+    "/docs/getting-started/",
+]
+
+sitemap_xml(
+    name = "sitemap",
+    base_url = "https://example.com",
+    changefreq = "weekly",
+    lastmod = "2026-08-09",
+    out = "sitemap.xml",
+    pages = PAGES,
+)
+
+robots_txt(
+    name = "robots",
+    allow = ["/"],
+    base_url = "https://example.com",
+    disallow = ["/admin/"],
+    out = "robots.txt",
+    sitemaps = ["/sitemap.xml"],
+)
+
+filegroup(
+    name = "site",
+    srcs = [
+        ":robots",
+        ":sitemap",
+    ],
+)
+
+diff_test(
+    name = "sitemap_test",
+    file1 = ":sitemap",
+    file2 = "expected/sitemap.xml",
+)
+
+diff_test(
+    name = "robots_test",
+    file1 = ":robots",
+    file2 = "expected/robots.txt",
+)

@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /draft/
+Disallow: /internal/
+
+Sitemap: https://example.com/sitemap-index.xml

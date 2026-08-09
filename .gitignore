@@ -1,0 +1,4 @@
+/bazel-*
+/examples/site/bazel-*
+MODULE.bazel.lock
+.DS_Store

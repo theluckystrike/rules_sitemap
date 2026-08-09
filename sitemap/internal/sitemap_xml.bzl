@@ -1,0 +1,152 @@
+"""Implementation of the `sitemap_xml` and `sitemap_index` rules."""
+
+load(
+    ":xml.bzl",
+    "check_changefreq",
+    "check_count",
+    "check_lastmod",
+    "check_priority",
+    "check_unique",
+    "escape_xml",
+    "join_url",
+    "normalize_base_url",
+)
+
+_URLSET_OPEN = "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"
+_INDEX_OPEN = "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"
+_XML_DECL = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+
+def render_urlset(base_url, pages, lastmod, changefreq, priority):
+    """Renders a sitemap document.
+
+    Args:
+      base_url: absolute origin, for example `https://example.com`.
+      pages: list of root-relative paths.
+      lastmod: optional W3C Datetime applied to every entry.
+      changefreq: optional sitemap protocol change frequency.
+      priority: optional decimal priority applied to every entry.
+
+    Returns:
+      The complete XML document as a string, newline terminated.
+    """
+    origin = normalize_base_url(base_url)
+    check_unique(pages)
+    check_count(pages)
+    check_lastmod(lastmod)
+    check_changefreq(changefreq)
+    check_priority(priority)
+
+    lines = [_XML_DECL, _URLSET_OPEN]
+    for path in pages:
+        lines.append("  <url>")
+        lines.append("    <loc>%s</loc>" % escape_xml(join_url(origin, path)))
+        if lastmod:
+            lines.append("    <lastmod>%s</lastmod>" % escape_xml(lastmod))
+        if changefreq:
+            lines.append("    <changefreq>%s</changefreq>" % escape_xml(changefreq))
+        if priority:
+            lines.append("    <priority>%s</priority>" % escape_xml(priority))
+        lines.append("  </url>")
+    lines.append("</urlset>")
+    return "\n".join(lines) + "\n"
+
+def render_index(base_url, sitemaps, lastmod):
+    """Renders a sitemap index document.
+
+    Args:
+      base_url: absolute origin, for example `https://example.com`.
+      sitemaps: list of root-relative paths to child sitemaps.
+      lastmod: optional W3C Datetime applied to every entry.
+
+    Returns:
+      The complete XML document as a string, newline terminated.
+    """
+    origin = normalize_base_url(base_url)
+    check_unique(sitemaps)
+    check_lastmod(lastmod)
+    if not sitemaps:
+        fail("sitemap_index requires at least one child sitemap")
+
+    lines = [_XML_DECL, _INDEX_OPEN]
+    for path in sitemaps:
+        lines.append("  <sitemap>")
+        lines.append("    <loc>%s</loc>" % escape_xml(join_url(origin, path)))
+        if lastmod:
+            lines.append("    <lastmod>%s</lastmod>" % escape_xml(lastmod))
+        lines.append("  </sitemap>")
+    lines.append("</sitemapindex>")
+    return "\n".join(lines) + "\n"
+
+def _sitemap_xml_impl(ctx):
+    content = render_urlset(
+        ctx.attr.base_url,
+        ctx.attr.pages,
+        ctx.attr.lastmod,
+        ctx.attr.changefreq,
+        ctx.attr.priority,
+    )
+    ctx.actions.write(output = ctx.outputs.out, content = content)
+    return [DefaultInfo(files = depset([ctx.outputs.out]))]
+
+sitemap_xml = rule(
+    implementation = _sitemap_xml_impl,
+    doc = """Generates a sitemaps.org `urlset` document from a list of paths.
+
+Paths are root-relative and are joined onto `base_url`, so the same page list
+can be reused for a staging origin and a production origin. Every URL is XML
+entity escaped, duplicates are rejected, and the 50,000 URL protocol limit is
+enforced at analysis time.""",
+    attrs = {
+        "base_url": attr.string(
+            mandatory = True,
+            doc = "Absolute origin the paths are joined onto, for example `https://example.com`. A trailing slash is ignored.",
+        ),
+        "pages": attr.string_list(
+            mandatory = True,
+            doc = "Root-relative page paths, each beginning with `/`. Must be unique.",
+        ),
+        "lastmod": attr.string(
+            doc = "Optional W3C Datetime (`YYYY-MM-DD` or a full timestamp) written to every entry.",
+        ),
+        "changefreq": attr.string(
+            doc = "Optional sitemap protocol change frequency written to every entry.",
+        ),
+        "priority": attr.string(
+            doc = "Optional priority between `0.0` and `1.0` written to every entry.",
+        ),
+        "out": attr.output(
+            mandatory = True,
+            doc = "The generated XML file, conventionally named `sitemap.xml`.",
+        ),
+    },
+)
+
+def _sitemap_index_impl(ctx):
+    content = render_index(ctx.attr.base_url, ctx.attr.sitemaps, ctx.attr.lastmod)
+    ctx.actions.write(output = ctx.outputs.out, content = content)
+    return [DefaultInfo(files = depset([ctx.outputs.out]))]
+
+sitemap_index = rule(
+    implementation = _sitemap_index_impl,
+    doc = """Generates a sitemaps.org `sitemapindex` document.
+
+Use this when a site has more than one sitemap, either because it exceeds the
+50,000 URL limit or because the sections are generated by separate targets.""",
+    attrs = {
+        "base_url": attr.string(
+            mandatory = True,
+            doc = "Absolute origin the child sitemap paths are joined onto.",
+        ),
+        "sitemaps": attr.string_list(
+            mandatory = True,
+            doc = "Root-relative paths to the child sitemaps, each beginning with `/`.",
+        ),
+        "lastmod": attr.string(
+            doc = "Optional W3C Datetime written to every entry.",
+        ),
+        "out": attr.output(
+            mandatory = True,
+            doc = "The generated XML file, conventionally named `sitemap-index.xml`.",
+        ),
+    },
+)

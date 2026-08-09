@@ -1,0 +1,21 @@
+package(default_visibility = ["//visibility:public"])
+
+licenses(["notice"])
+
+exports_files([
+    "LICENSE",
+    "README.md",
+])
+
+# A target sharing the module's own name, so `@theluckystrike_rules_sitemap`
+# resolves, as the BCR guidelines suggest. The rules are pure Starlark, so the
+# only thing to ship is the .bzl source.
+filegroup(
+    name = "theluckystrike_rules_sitemap",
+    srcs = [
+        "//sitemap:defs.bzl",
+        "//sitemap/internal:robots_txt.bzl",
+        "//sitemap/internal:sitemap_xml.bzl",
+        "//sitemap/internal:xml.bzl",
+    ],
+)
